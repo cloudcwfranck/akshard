@@ -1,0 +1,90 @@
+# Kyverno Policy: Require SBOM Attestation
+# Enforces that all images have SBOM attestations
+# Executive Order 14028: Software Bill of Materials requirement
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-sbom-attestation
+  annotations:
+    policies.kyverno.io/title: Require SBOM Attestation
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      All container images must have SBOM (Software Bill of Materials)
+      attestations in CycloneDX or SPDX format. This enables vulnerability
+      tracking and license compliance.
+    compliance.framework/eo-14028: "SBOM-Requirement"
+    compliance.framework/nist: "SA-15"
+    compliance.framework/slsa: "Level-3"
+spec:
+  validationFailureAction: Audit # Start with Audit, move to Enforce
+  webhookTimeoutSeconds: 30
+  background: false
+
+  rules:
+    - name: verify-sbom-attestation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+
+      verifyImages:
+        - imageReferences:
+            - "*"
+
+          # Require SBOM attestation
+          attestations:
+            # CycloneDX format
+            - predicateType: https://cyclonedx.org/bom
+              attestors:
+                - entries:
+                    - keyless:
+                        subject: "*@*"
+                        issuer: "https://token.actions.githubusercontent.com"
+                        rekor:
+                          url: https://rekor.sigstore.dev
+
+            # SPDX format (alternative)
+            - predicateType: https://spdx.dev/Document
+              attestors:
+                - entries:
+                    - keyless:
+                        subject: "*@*"
+                        issuer: "https://token.actions.githubusercontent.com"
+                        rekor:
+                          url: https://rekor.sigstore.dev
+
+    - name: validate-sbom-content
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+
+      verifyImages:
+        - imageReferences:
+            - "*"
+
+          attestations:
+            - predicateType: https://cyclonedx.org/bom
+              conditions:
+                - all:
+                    # Ensure SBOM has required fields
+                    - key: "{{ specVersion }}"
+                      operator: NotEquals
+                      value: ""
+                    - key: "{{ version }}"
+                      operator: GreaterThanOrEquals
+                      value: "1"
+                    - key: "{{ components }}"
+                      operator: NotEquals
+                      value: "[]"

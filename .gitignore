@@ -1,0 +1,55 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Helm
+*.tgz
+charts/*/charts/
+charts/*/Chart.lock
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Secrets
+*.pem
+*.key
+*.crt
+secrets.yaml
+*.enc
+.sops.yaml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+*.log
+
+# Azure
+.azure/
+
+# Environment
+.env
+.env.local

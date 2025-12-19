@@ -1,0 +1,89 @@
+# Example: Allow Ingress to Application
+# Demonstrates explicit allow for web applications
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-web
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+      tier: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from ingress controller only
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-to-api
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+      tier: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from frontend pods only
+    - from:
+        - podSelector:
+            matchLabels:
+              app: web
+              tier: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-egress-to-database
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+      tier: backend
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+
+    # Allow to database pods
+    - to:
+        - podSelector:
+            matchLabels:
+              app: database
+              tier: data
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Allow to Azure services (Key Vault, etc.)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443

@@ -1,0 +1,105 @@
+# Kyverno Policy: Require Images from Approved Registries
+# CIS 5.1.2: Minimize wildcard use in cluster and local roles
+# DoD STIG V-242387: Container images must be from approved sources
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-from-approved-registry
+  annotations:
+    policies.kyverno.io/title: Require Images from Approved Registries
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      All container images must originate from approved container registries.
+      This prevents pulling images from untrusted sources.
+    compliance.framework/cis: "5.1.2"
+    compliance.framework/dod-stig: "V-242387"
+    compliance.framework/nist: "CM-5,SA-12"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+
+  rules:
+    - name: validate-registry
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Images must be from approved registries only:
+          - cgr.dev (Chainguard)
+          - ghcr.io/chainguard-images
+          - <your-acr-name>.azurecr.io
+          - mcr.microsoft.com (Microsoft Container Registry)
+          - registry.k8s.io (Kubernetes official)
+          Found: {{ request.object.spec.containers[].image }}
+
+        foreach:
+          - list: "request.object.spec.[initContainers, ephemeralContainers, containers][]"
+            deny:
+              conditions:
+                all:
+                  # Deny if image doesn't start with approved registries
+                  - key: "{{ element.image }}"
+                    operator: NotIn
+                    value:
+                      - "cgr.dev/*"
+                      - "ghcr.io/chainguard-images/*"
+                      - "*.azurecr.io/*"
+                      - "mcr.microsoft.com/*"
+                      - "registry.k8s.io/*"
+                  # Explicitly deny public Docker Hub (docker.io)
+                  - key: "{{ element.image }}"
+                    operator: In
+                    value:
+                      - "docker.io/*"
+                      - "index.docker.io/*"
+
+    - name: block-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Using 'latest' tag is prohibited. Use immutable tags (semantic
+          versioning or SHA digests) for supply chain security.
+
+        foreach:
+          - list: "request.object.spec.[initContainers, ephemeralContainers, containers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ element.image }}"
+                    operator: NotIn
+                    value:
+                      - "*:*" # Must have a tag
+                  - key: "{{ element.image }}"
+                    operator: NotIn
+                    value:
+                      - "*@sha256:*" # Or SHA digest
+
+    - name: require-digest-or-semver
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Images must use either SHA256 digest (@sha256:...) or semantic
+          versioning tags (vX.Y.Z) for immutability.
+
+        foreach:
+          - list: "request.object.spec.[initContainers, ephemeralContainers, containers][]"
+            pattern:
+              image: "*@sha256:* | *:v?.?.? | *:v?.?.?-*"

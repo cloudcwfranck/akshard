@@ -1,0 +1,74 @@
+# Kyverno Policy: Restrict Privileged Containers
+# CIS 5.2.1: Minimize admission of privileged containers
+# DoD STIG V-242381: Containers must run with the least privileges
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-privileged-containers
+  annotations:
+    policies.kyverno.io/title: Restrict Privileged Containers
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Privileged mode disables most security mechanisms and must not be allowed.
+      This policy ensures containers do not run in privileged mode.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    compliance.framework/cis: "5.2.1"
+    compliance.framework/dod-stig: "V-242381"
+    compliance.framework/nist: "CM-7"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: check-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Privileged mode is not allowed. Set 'privileged' to false in
+          securityContext.
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(privileged): false
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): false
+            containers:
+              - =(securityContext):
+                  =(privileged): false
+
+    - name: check-privileged-controllers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      validate:
+        message: >-
+          Privileged mode is not allowed in controller workloads.
+        pattern:
+          spec:
+            template:
+              spec:
+                =(ephemeralContainers):
+                  - =(securityContext):
+                      =(privileged): false
+                =(initContainers):
+                  - =(securityContext):
+                      =(privileged): false
+                containers:
+                  - =(securityContext):
+                      =(privileged): false

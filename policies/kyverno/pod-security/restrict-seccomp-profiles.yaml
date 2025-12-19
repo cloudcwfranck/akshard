@@ -1,0 +1,48 @@
+# Kyverno Policy: Restrict Seccomp Profiles
+# CIS 5.7.2: Apply security context to pods and containers
+# PSS Restricted: seccompProfile required
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-seccomp-profiles
+  annotations:
+    policies.kyverno.io/title: Restrict Seccomp Profiles
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Seccomp profile must be set to RuntimeDefault or Localhost.
+      Unconfined is not allowed.
+    pod-security.kubernetes.io/enforce: restricted
+    compliance.framework/cis: "5.7.2"
+    compliance.framework/dod-stig: "V-242415"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: check-seccomp-profile
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Seccomp profile must be set to RuntimeDefault or Localhost.
+          Set securityContext.seccompProfile.type.
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(seccompProfile):
+                    =(type): "RuntimeDefault | Localhost"
+            =(initContainers):
+              - =(securityContext):
+                  =(seccompProfile):
+                    =(type): "RuntimeDefault | Localhost"
+            containers:
+              - =(securityContext):
+                  =(seccompProfile):
+                    =(type): "RuntimeDefault | Localhost"

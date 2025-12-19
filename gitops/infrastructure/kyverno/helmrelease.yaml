@@ -1,0 +1,88 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kyverno
+  namespace: kyverno
+spec:
+  interval: 30m
+  timeout: 10m
+  chart:
+    spec:
+      chart: kyverno
+      version: '>=3.1.0 <4.0.0'
+      sourceRef:
+        kind: HelmRepository
+        name: kyverno
+        namespace: kyverno
+      interval: 12h
+
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+    cleanupOnFail: true
+
+  # Use values from our custom chart
+  valuesFrom:
+    - kind: ConfigMap
+      name: kyverno-values
+      optional: false
+
+  # Additional inline values
+  values:
+    # Override image to use Chainguard
+    image:
+      repository: cgr.dev/chainguard/kyverno
+      tag: "latest-dev" # Pin specific version in production
+
+    admissionController:
+      replicas: 3
+      container:
+        image:
+          repository: cgr.dev/chainguard/kyverno
+
+    backgroundController:
+      replicas: 2
+      container:
+        image:
+          repository: cgr.dev/chainguard/kyverno
+
+    cleanupController:
+      container:
+        image:
+          repository: cgr.dev/chainguard/kyverno
+
+    reportsController:
+      container:
+        image:
+          repository: cgr.dev/chainguard/kyverno
+
+  # Health checks
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+            patch: |-
+              - op: add
+                path: /spec/template/metadata/annotations/container.apparmor.security.beta.kubernetes.io~1kyverno
+                value: runtime/default
+
+  # Drift detection
+  driftDetection:
+    mode: enabled
+    ignore:
+      - paths: ["/spec/replicas"]
+        target:
+          kind: Deployment
+
+  # Tests
+  test:
+    enable: true
+    timeout: 5m

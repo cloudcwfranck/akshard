@@ -1,0 +1,77 @@
+# Kyverno Policy: Require Chainguard Distroless Images
+# Enforces use of Chainguard distroless images for minimal attack surface
+# NIST 800-190: Use minimal base images
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-chainguard-images
+  annotations:
+    policies.kyverno.io/title: Require Chainguard Images for Platform Services
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Platform services (system namespaces) must use Chainguard distroless
+      images to minimize attack surface and ensure security patching.
+    compliance.framework/nist: "800-190:Section-4.1"
+    compliance.framework/cisa: "SCM-1"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+
+  rules:
+    - name: require-chainguard-for-platform
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                # Platform/system namespaces
+                - cert-manager
+                - ingress-nginx
+                - external-secrets
+                - kyverno
+                - falco
+                - monitoring
+                - observability
+
+      validate:
+        message: >-
+          Platform services must use Chainguard distroless images from
+          cgr.dev or ghcr.io/chainguard-images. Found: {{ request.object.spec.containers[].image }}
+
+        foreach:
+          - list: "request.object.spec.[initContainers, containers][]"
+            pattern:
+              image: "cgr.dev/* | ghcr.io/chainguard-images/*"
+
+    - name: validate-chainguard-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+
+      verifyImages:
+        - imageReferences:
+            - "cgr.dev/*"
+            - "ghcr.io/chainguard-images/*"
+
+          # Chainguard images are signed with Cosign
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "*@chainguard.dev"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev
+                - keys:
+                    # Chainguard public key for signature verification
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqGFBs6qXxVCZHpvhZx3Z9LWzJ5Rk
+                      EYF7VNmqYNfqkfGYO1JBxW5qiqQHCNPJz7vK3vJDJy3xGy5qHOLQNNf6SQ==
+                      -----END PUBLIC KEY-----

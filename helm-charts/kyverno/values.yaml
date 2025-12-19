@@ -1,0 +1,224 @@
+# Kyverno Helm Chart Values with Chainguard Images
+# Hardened configuration for enterprise AKS deployments
+
+kyverno:
+  enabled: true
+
+  # Use Chainguard distroless images
+  image:
+    repository: cgr.dev/chainguard/kyverno
+    tag: "latest" # Use specific version in production
+    pullPolicy: IfNotPresent
+
+  initImage:
+    repository: cgr.dev/chainguard/kyverno-init
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  # High availability configuration
+  replicaCount: 3
+
+  # Resource limits (required for production)
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Pod Security Context (PSS Restricted)
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532 # nonroot user
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container Security Context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65532
+    capabilities:
+      drop:
+        - ALL
+
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Anti-affinity for HA
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - kyverno
+          topologyKey: kubernetes.io/hostname
+
+  # Network Policy
+  networkPolicy:
+    enabled: true
+
+  # Service Monitor for Prometheus
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+
+  # Admission Controller Configuration
+  admissionController:
+    replicas: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+    container:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+  # Background Controller
+  backgroundController:
+    enabled: true
+    replicas: 2
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # Cleanup Controller
+  cleanupController:
+    enabled: true
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+  # Reports Controller
+  reportsController:
+    enabled: true
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # Features
+  features:
+    admissionReports:
+      enabled: true
+    aggregateReports:
+      enabled: true
+    policyReports:
+      enabled: true
+    validatingAdmissionPolicyReports:
+      enabled: true
+    autoUpdateWebhooks:
+      enabled: true
+    backgroundScan:
+      enabled: true
+      interval: 1h
+
+  # Configuration
+  config:
+    webhooks:
+      - namespaceSelector:
+          matchExpressions:
+            - key: kubernetes.io/metadata.name
+              operator: NotIn
+              values:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+    # Exclude resources from policy enforcement (if needed)
+    excludeGroups:
+      - system:nodes
+      - system:kube-scheduler
+
+  # Logging
+  logging:
+    verbosity: 2
+    format: json
+
+  # Metrics
+  metricsService:
+    create: true
+    type: ClusterIP
+    port: 8000
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8000"
+      prometheus.io/path: "/metrics"
+
+policies:
+  enabled: true
+
+  # Pod Security Standards
+  podSecurityStandard: restricted
+  podSecuritySeverity: medium
+  podSecurityValidationFailureAction: Enforce
+
+  # Best practices policies
+  includeRestrictedPolicies: true
+
+# Custom policy configurations
+customPolicies:
+  # Supply chain security
+  supplyChain:
+    enabled: true
+    validationFailureAction: Enforce
+    requireSignedImages: true
+    requireSBOM: true
+    requireSLSAProvenance: true
+    approvedRegistries:
+      - cgr.dev
+      - ghcr.io/chainguard-images
+      - "*.azurecr.io"
+      - mcr.microsoft.com
+      - registry.k8s.io
+
+  # CIS Benchmark policies
+  cisBenchmark:
+    enabled: true
+    version: "1.8"
+    validationFailureAction: Enforce
+
+  # DoD STIG policies
+  dodStig:
+    enabled: true
+    version: "v1r12"
+    validationFailureAction: Enforce
+
+# Azure Workload Identity
+azure:
+  workloadIdentity:
+    enabled: true
+    clientId: "" # Set via --set or values override
+    tenantId: "" # Set via --set or values override
