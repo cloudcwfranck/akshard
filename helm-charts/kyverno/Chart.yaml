@@ -1,0 +1,33 @@
+apiVersion: v2
+name: kyverno-platform
+description: Kyverno policy engine with Chainguard images for AKS
+type: application
+version: 1.0.0
+appVersion: "1.11.0"
+
+keywords:
+  - kyverno
+  - policy
+  - security
+  - admission-controller
+  - chainguard
+
+maintainers:
+  - name: Platform Team
+    email: platform@example.com
+
+dependencies:
+  - name: kyverno
+    version: "3.1.4"
+    repository: https://kyverno.github.io/kyverno/
+    condition: kyverno.enabled
+
+  - name: kyverno-policies
+    version: "3.1.4"
+    repository: https://kyverno.github.io/kyverno/
+    condition: policies.enabled
+
+annotations:
+  compliance.framework/cis: "5.1.1"
+  compliance.framework/dod-stig: "V-242414"
+  security.baseline: "Pod Security Standards"

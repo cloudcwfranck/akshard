@@ -1,0 +1,81 @@
+# Kyverno Policy: Require Dropping All Capabilities
+# CIS 5.2.7: Minimize the admission of containers with capabilities assigned
+# DoD STIG V-242417: Minimize container capabilities
+# PSS Restricted: Capabilities must be dropped
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-drop-all-capabilities
+  annotations:
+    policies.kyverno.io/title: Require Dropping All Capabilities
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers must drop ALL capabilities and only add back the minimal
+      required capabilities. This enforces the principle of least privilege.
+    pod-security.kubernetes.io/enforce: restricted
+    compliance.framework/cis: "5.2.7,5.2.8,5.2.9"
+    compliance.framework/dod-stig: "V-242417"
+    compliance.framework/nist: "CM-7"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: require-drop-all
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          All capabilities must be dropped. Set 'drop: ["ALL"]' in
+          securityContext.capabilities.
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - "ALL"
+            =(initContainers):
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - "ALL"
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - "ALL"
+
+    - name: restrict-capabilities-add
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Only NET_BIND_SERVICE capability can be added after dropping all.
+          Found disallowed capabilities.
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "NET_BIND_SERVICE"
+            =(initContainers):
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "NET_BIND_SERVICE"
+            containers:
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "NET_BIND_SERVICE"

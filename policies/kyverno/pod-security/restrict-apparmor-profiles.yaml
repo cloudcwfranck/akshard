@@ -1,0 +1,38 @@
+# Kyverno Policy: Restrict AppArmor Profiles
+# CIS 5.7.2: Apply security context
+# PSS Restricted: AppArmor profile required
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-apparmor-profiles
+  annotations:
+    policies.kyverno.io/title: Restrict AppArmor Profiles
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      AppArmor profile must be set to runtime/default or a custom profile.
+      Unconfined is not allowed.
+    pod-security.kubernetes.io/enforce: restricted
+    compliance.framework/cis: "5.7.2"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: check-apparmor-profile
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          AppArmor profile must be runtime/default or localhost/*.
+          Annotation container.apparmor.security.beta.kubernetes.io/<container-name>
+          must be set.
+        pattern:
+          metadata:
+            =(annotations):
+              =(container.apparmor.security.beta.kubernetes.io/*): "runtime/default | localhost/*"

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    toolkit.fluxcd.io/tenant: platform-team
+  annotations:
+    compliance.framework/cis: "5.7.4"
+    compliance.framework/pss: "restricted"

@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kyverno
+
+resources:
+  - namespace.yaml
+  - helmrepository.yaml
+  - helmrelease.yaml
+  - policy-reporter.yaml
+
+# Apply policies after Kyverno is ready
+patches:
+  - target:
+      kind: HelmRelease
+      name: kyverno
+    patch: |-
+      - op: add
+        path: /spec/postRenderers
+        value:
+          - kustomize:
+              patches:
+                - target:
+                    kind: Deployment
+                  patch: |-
+                    - op: add
+                      path: /spec/template/spec/securityContext
+                      value:
+                        runAsNonRoot: true
+                        runAsUser: 65532
+                        fsGroup: 65532
+                        seccompProfile:
+                          type: RuntimeDefault

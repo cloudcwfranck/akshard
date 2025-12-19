@@ -1,0 +1,99 @@
+# Kyverno Policy: Restrict Volume Types
+# CIS 5.2.4: Minimize admission of containers with host path volumes
+# DoD STIG V-242415: Restrict volume types
+# PSS Restricted: Only certain volume types allowed
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-volume-types
+  annotations:
+    policies.kyverno.io/title: Restrict Volume Types
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod,Volume
+    policies.kyverno.io/description: >-
+      Restricts volume types to a safe list. HostPath and other dangerous
+      volume types are prohibited.
+    pod-security.kubernetes.io/enforce: restricted
+    compliance.framework/cis: "5.2.4"
+    compliance.framework/dod-stig: "V-242415"
+    compliance.framework/nist: "CM-7"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: restrict-volume-types
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Only approved volume types are allowed: configMap, emptyDir,
+          projected, secret, downwardAPI, persistentVolumeClaim, csi,
+          ephemeral. HostPath and hostNetwork volumes are prohibited.
+        deny:
+          conditions:
+            any:
+              # Deny hostPath volumes
+              - key: "{{ request.object.spec.volumes[?type(@)=='array'] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+                anyPattern:
+                  - volumes:
+                      - hostPath: "*"
+              # Deny gcePersistentDisk
+              - key: "{{ request.object.spec.volumes[?gcePersistentDisk] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny awsElasticBlockStore
+              - key: "{{ request.object.spec.volumes[?awsElasticBlockStore] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny gitRepo
+              - key: "{{ request.object.spec.volumes[?gitRepo] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny nfs
+              - key: "{{ request.object.spec.volumes[?nfs] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny iscsi
+              - key: "{{ request.object.spec.volumes[?iscsi] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny glusterfs
+              - key: "{{ request.object.spec.volumes[?glusterfs] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny rbd
+              - key: "{{ request.object.spec.volumes[?rbd] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny flexVolume
+              - key: "{{ request.object.spec.volumes[?flexVolume] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny cinder
+              - key: "{{ request.object.spec.volumes[?cinder] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny cephfs
+              - key: "{{ request.object.spec.volumes[?cephfs] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny flocker
+              - key: "{{ request.object.spec.volumes[?flocker] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny fc
+              - key: "{{ request.object.spec.volumes[?fc] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # Deny azureFile with credential exposure
+              - key: "{{ request.object.spec.volumes[?azureFile.secretName] | length(@) }}"
+                operator: GreaterThan
+                value: 0

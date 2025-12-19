@@ -1,0 +1,114 @@
+# Kyverno Policy: Verify SLSA Provenance
+# Enforces SLSA Level 3 provenance for all container images
+# SLSA Framework: Supply chain Levels for Software Artifacts
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-slsa-provenance
+  annotations:
+    policies.kyverno.io/title: Verify SLSA Provenance
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      All container images must have SLSA provenance attestations proving
+      they were built by a trusted build system with proper isolation.
+    compliance.framework/slsa: "Level-3"
+    compliance.framework/nist: "SA-15,SI-7"
+    compliance.framework/ssdf: "PO.3.2"
+spec:
+  validationFailureAction: Audit # Start with Audit mode
+  webhookTimeoutSeconds: 30
+  background: false
+
+  rules:
+    - name: verify-slsa-provenance
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+
+      verifyImages:
+        - imageReferences:
+            - "*"
+
+          attestations:
+            - predicateType: https://slsa.dev/provenance/v0.2
+              attestors:
+                - entries:
+                    # GitHub Actions OIDC token
+                    - keyless:
+                        subject: "*"
+                        issuer: "https://token.actions.githubusercontent.com"
+                        rekor:
+                          url: https://rekor.sigstore.dev
+                    # Azure DevOps (if used)
+                    - keyless:
+                        subject: "*"
+                        issuer: "https://sts.windows.net/*"
+                        rekor:
+                          url: https://rekor.sigstore.dev
+
+              # Validate provenance content
+              conditions:
+                - all:
+                    # SLSA Build Level must be >= 2
+                    - key: "{{ buildDefinition.externalParameters.slsaBuildLevel }}"
+                      operator: GreaterThanOrEquals
+                      value: "2"
+
+                    # Builder must be trusted
+                    - key: "{{ builder.id }}"
+                      operator: In
+                      value:
+                        - "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml*"
+                        - "https://cloudbuild.googleapis.com/GoogleHostedWorker*"
+
+                    # Build type must be container
+                    - key: "{{ buildType }}"
+                      operator: Equals
+                      value: "https://slsa.dev/provenance/v0.2"
+
+                    # Must have source repository
+                    - key: "{{ materials[?uri].uri }}"
+                      operator: NotEquals
+                      value: ""
+
+    - name: verify-builder-identity
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+
+      verifyImages:
+        - imageReferences:
+            - "*"
+
+          attestations:
+            - predicateType: https://slsa.dev/provenance/v0.2
+              conditions:
+                - all:
+                    # Ensure builder is from trusted source
+                    - key: "{{ runDetails.builder.id }}"
+                      operator: In
+                      value:
+                        - "https://github.com/*"
+                        - "https://cloudbuild.googleapis.com/*"
+
+                    # Ensure build was non-falsifiable
+                    - key: "{{ runDetails.metadata.completeness.parameters }}"
+                      operator: Equals
+                      value: true
+
+                    - key: "{{ runDetails.metadata.completeness.environment }}"
+                      operator: Equals
+                      value: true

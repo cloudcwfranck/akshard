@@ -1,0 +1,83 @@
+# Kyverno Policy: Require Run As Non-Root User
+# CIS 5.2.6: Ensure containers do not run as root
+# DoD STIG V-242383, V-242392
+# PSS Restricted: runAsNonRoot must be true
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-non-root
+  annotations:
+    policies.kyverno.io/title: Require Run As Non-Root
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers must not run as root user. This policy ensures runAsNonRoot
+      is set to true and runAsUser is >= 1000.
+    pod-security.kubernetes.io/enforce: restricted
+    compliance.framework/cis: "5.2.6"
+    compliance.framework/dod-stig: "V-242383,V-242392"
+    compliance.framework/nist: "AC-6"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  failurePolicy: Fail
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Containers must run as non-root user. Set runAsNonRoot=true in
+          pod securityContext or container securityContext.
+        anyPattern:
+          # Pod-level securityContext
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          # Container-level securityContext
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
+
+    - name: run-as-user-minimum
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          runAsUser must be >= 1000. System UIDs (0-999) are reserved.
+        pattern:
+          spec:
+            =(securityContext):
+              =(runAsUser): ">=1000"
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(runAsUser): ">=1000"
+            =(initContainers):
+              - =(securityContext):
+                  =(runAsUser): ">=1000"
+            containers:
+              - =(securityContext):
+                  =(runAsUser): ">=1000"
+
+    - name: check-fsgroup
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          fsGroup must be set and >= 1000 for proper file permissions.
+        pattern:
+          spec:
+            =(securityContext):
+              =(fsGroup): ">=1000"
